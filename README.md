@@ -24,6 +24,7 @@ bot-teste-portal/
 │   ├── registrar_conta.py
 │   ├── analisar_plataforma.py
 │   └── crawler.py
+├── assets/
 ├── reports/
 ├── .env.example
 ├── .gitignore
@@ -58,7 +59,7 @@ uv run python -m bots.main
 Ou via console script:
 
 ```bash
-bruce-bot
+bot-teste
 ```
 
 ## Relatório
@@ -66,6 +67,25 @@ bruce-bot
 - `reports/analise.json`: snapshots das rotas iniciais visitadas
 - `reports/sitemap.json`: varredura controlada da estrutura do site com profundidade e metadados
 - `reports/screenshots/`: capturas de tela por rota e por crawler
+
+## Resultados da Execução
+
+Visão analítica da varredura automatizada.
+
+**Cobertura**
+![Distribuição de páginas por profundidade](assets/distribuicao_profundidade.png)
+
+**Elementos por página**
+![Distribuição de botões por página](assets/histograma_botoes.png)
+![Distribuição de campos por página](assets/histograma_campos.png)
+
+Métricas resumidas da última execução:
+- Páginas mapeadas: 200
+- Profundidade máxima: 3
+- Média de botões por página: ~26
+- Média de campos por página: ~11
+- Erros de console: 0
+- Falhas de requisição: 0
 
 ## Fluxo
 
