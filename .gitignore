@@ -5,3 +5,4 @@ __pycache__/
 reports/
 storage_state.json
 *.log
+AGENTS.md
