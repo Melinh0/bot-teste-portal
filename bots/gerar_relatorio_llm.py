@@ -1,6 +1,5 @@
 import json
 import os
-import re
 
 import requests
 
@@ -10,7 +9,7 @@ load_dotenv()
 PASTA_RELATORIOS = os.getenv("PASTA_RELATORIOS", "reports")
 OLLAMA_API_KEY = os.getenv("OLLAMA_API_KEY")
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "https://api.ollama.com")
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama3.1")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "gemma4:31b-cloud")
 
 
 def _carregar_json(caminho):
@@ -18,11 +17,11 @@ def _carregar_json(caminho):
         return json.load(arquivo)
 
 
-def _extrair_dados_para_llm(analise):
+def _extrair_paginas(analise):
     paginas = []
     for entrada in analise:
         pagina = {
-            "rota": entrada.get("rota"),
+            "rota": entrada.get("rota") or entrada.get("rota_crawler") or entrada.get("url"),
             "titulo": entrada.get("titulo"),
             "headings": entrada.get("headings", []),
             "botoes": entrada.get("botoes", []),
@@ -32,6 +31,7 @@ def _extrair_dados_para_llm(analise):
                     "placeholder": c.get("placeholder"),
                     "label": c.get("aria_label"),
                     "id": c.get("id"),
+                    "name": c.get("name"),
                 }
                 for c in entrada.get("campos", [])
             ],
@@ -40,19 +40,32 @@ def _extrair_dados_para_llm(analise):
                 for l in entrada.get("links", [])
             ],
             "textos": entrada.get("textos", "")[:2000],
+            "erros": entrada.get("erros", []),
+            "falhas": entrada.get("falhas", []),
         }
         paginas.append(pagina)
     return paginas
 
 
-def _montar_prompt(paginas):
+def _extrair_sitemap(sitemap):
+    rotas = []
+    for entrada in sitemap:
+        rotas.append({
+            "rota": entrada.get("rota_crawler") or entrada.get("rota") or entrada.get("url"),
+            "profundidade": entrada.get("profundidade"),
+        })
+    return rotas
+
+
+def _montar_prompt(paginas, rotas_sitemap):
     linhas = []
-    linhas.append("A seguir estao os dados extraidos de uma varredura automatizada de um portal web.")
-    linhas.append("Com base nisso, produza um documento de requisitos e documentacao da plataforma.")
+    linhas.append("Voce e um especialista em analise de requisitos de software e documentacao de plataformas web.")
+    linhas.append("A seguir estao os dados extraidos de uma varredura automatizada de um portal web de representacao comercial.")
+    linhas.append("Com base nisso, produza um documento de requisitos detalhado e estruturado para replicacao da plataforma.")
     linhas.append("")
-    linhas.append("## Paginas mapeadas")
+    linhas.append("# Dados das paginas mapeadas")
     for pagina in paginas:
-        linhas.append(f"### Rota: {pagina['rota']}")
+        linhas.append(f"## Rota: {pagina['rota']}")
         linhas.append(f"Titulo: {pagina['titulo']}")
         if pagina["headings"]:
             linhas.append(f"Headings: {', '.join(pagina['headings'])}")
@@ -61,24 +74,42 @@ def _montar_prompt(paginas):
         if pagina["campos"]:
             linhas.append("Campos de formulario:")
             for campo in pagina["campos"]:
-                linhas.append(f"  - tipo={campo['tipo']} placeholder={campo['placeholder']} label={campo['label']}")
+                linhas.append(f"  - tipo={campo['tipo']} placeholder={campo['placeholder']} label={campo['label']} id={campo['id']} name={campo['name']}")
         if pagina["links"]:
             linhas.append("Links internos:")
             for link in pagina["links"]:
                 linhas.append(f"  - {link['href']}: {link['texto'][:80]}")
+        if pagina["erros"]:
+            linhas.append("Erros de console:")
+            for erro in pagina["erros"][:5]:
+                linhas.append(f"  - {erro.get('tipo')}: {erro.get('texto')[:100]}")
+        if pagina["falhas"]:
+            linhas.append("Falhas de requisicao:")
+            for falha in pagina["falhas"][:5]:
+                linhas.append(f"  - {falha.get('url')}: {falha.get('erro')[:100]}")
         if pagina["textos"]:
-            linhas.append(f"Texto relevante: {pagina['textos'][:500]}")
+            linhas.append(f"Texto relevante: {pagina['textos'][:600]}")
         linhas.append("")
-    linhas.append("## Saida esperada")
-    linhas.append("Gere um documento em markdown com:")
-    linhas.append("1. Resumo executivo da plataforma")
-    linhas.append("2. Modulos e funcionalidades identificados")
-    linhas.append("3. Fluxo de autenticacao e usuarios")
-    linhas.append("4. Catálogo de produtos e categorias")
-    linhas.append("5. Formularios e campos por tela")
-    linhas.append("6. Requisitos funcionais para replicacao")
-    linhas.append("7. Requisitos nao funcionais")
-    linhas.append("8. Modelo de dados sugerido (entidades e relacionamentos)")
+    linhas.append("# Rotas do sitemap")
+    for rota in rotas_sitemap:
+        linhas.append(f"- {rota['rota']} (profundidade {rota['profundidade']})")
+    linhas.append("")
+    linhas.append("# Saida esperada")
+    linhas.append("Gere um documento em markdown com as secoes abaixo, mantendo essa ordem e esses titulos exatos:")
+    linhas.append("1. Resumo Executivo")
+    linhas.append("2. Atores e Papéis de Usuario")
+    linhas.append("3. Fluxo de Autenticacao e Cadastro de Loja")
+    linhas.append("4. Catalogo de Funcionalidades por Modulo")
+    linhas.append("5. Requisitos Funcionais (RF-001 a RF-N) com descricao, prioridade e criterios de aceitacao")
+    linhas.append("6. Requisitos Nao Funcionais (desempenho, seguranca, usabilidade, compatibilidade)")
+    linhas.append("7. Modelo de Dados Sugerido (entidades, atributos e relacionamentos)")
+    linhas.append("8. Endpoints e Rotas Mapeados")
+    linhas.append("9. Formularios e Campos por Tela")
+    linhas.append("10. Regras de Negocio")
+    linhas.append("11. Navegacao e Experiencia do Usuario")
+    linhas.append("12. Riscos e Dependencias")
+    linhas.append("13. Glossario")
+    linhas.append("14. Anexo: Mapa do Site Resumido")
     linhas.append("")
     linhas.append("Nao inclua senhas, tokens, chaves de api ou dados pessoais reais.")
     return "\n".join(linhas)
@@ -117,9 +148,9 @@ def _chamar_ollama(prompt):
     raise RuntimeError(f"Erro ao chamar Ollama: {ultimo_erro}")
 
 
-def _salvar_relatorio(conteudo):
+def _salvar_arquivo(conteudo, nome_arquivo):
     os.makedirs(PASTA_RELATORIOS, exist_ok=True)
-    caminho = f"{PASTA_RELATORIOS}/requisitos_plataforma.md"
+    caminho = f"{PASTA_RELATORIOS}/{nome_arquivo}"
     with open(caminho, "w", encoding="utf-8") as arquivo:
         arquivo.write(conteudo)
     return caminho
@@ -127,10 +158,15 @@ def _salvar_relatorio(conteudo):
 
 def gerar_relatorio():
     analise = _carregar_json(f"{PASTA_RELATORIOS}/analise.json")
-    paginas = _extrair_dados_para_llm(analise)
-    prompt = _montar_prompt(paginas)
+    paginas = _extrair_paginas(analise)
+    try:
+        sitemap = _carregar_json(f"{PASTA_RELATORIOS}/sitemap.json")
+        rotas_sitemap = _extrair_sitemap(sitemap)
+    except FileNotFoundError:
+        rotas_sitemap = []
+    prompt = _montar_prompt(paginas, rotas_sitemap)
     relatorio = _chamar_ollama(prompt)
-    caminho = _salvar_relatorio(relatorio)
+    caminho = _salvar_arquivo(relatorio, "requisitos_plataforma.md")
     return caminho
 
 

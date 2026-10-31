@@ -8,15 +8,16 @@ load_dotenv()
 from playwright.sync_api import sync_playwright
 
 from bots.analisar_plataforma import capturar_estado, capturar_erros, capturar_falhas
-from bots.crawler import varredura_controlada
 from bots.fazer_login import (
     BASE_URL,
     cadastrar_loja_cnpj,
     fazer_login,
     pode_acessar,
 )
+from bots.gerar_pdf import gerar_pdf
+from bots.gerar_relatorio_llm import gerar_relatorio
 
-PASTA_RELATORIOS = "reports"
+PASTA_RELATORIOS = os.getenv("PASTA_RELATORIOS", "reports")
 PASTA_SHOTS = f"{PASTA_RELATORIOS}/screenshots"
 PASTA_HTML = f"{PASTA_RELATORIOS}/html"
 
@@ -93,6 +94,11 @@ def main() -> None:
                 continue
 
         _salvar_json(f"{PASTA_RELATORIOS}/analise.json", relatorios)
+
+        if os.getenv("GERAR_DOC_LLM", "true").lower() in {"1", "true", "yes"}:
+            caminho_md = gerar_relatorio()
+            if os.getenv("GERAR_PDF", "true").lower() in {"1", "true", "yes"}:
+                gerar_pdf(caminho_md)
 
         contexto.close()
         navegador.close()
